@@ -5,6 +5,7 @@ SOURCE_DIR="work"
 DEST_DIR="tdm.pk3dir"
 
 # Create the destination directory
+rm -r "$DEST_DIR/default.cfg"
 rm -r "$DEST_DIR/af"
 rm -r "$DEST_DIR/def"
 rm -r "$DEST_DIR/fx"
