@@ -19,6 +19,7 @@ int on_extract_entry(const char *filename, void *arg);
 int is_directory(const char *path);
 int is_file(const char *path);
 
+void rename_non_d_folders(const char *textures_path);
 void remove_dir_recursive(const char *path);
 void flatten_recursive	(const char *dest_path, const char *src_path, const char *prefix);
 void remove_empty_dirs	(const char *path);
@@ -207,7 +208,13 @@ int main(int argc, char* argv[])
 	}
 
 	closedir(normal_dir);
+
+	// rename everything else in d_ to t_
 	
+	char t_path[path_max];
+	snprintf(t_path, sizeof(t_path), "%s/textures", output_dir);
+	rename_non_d_folders(t_path);
+
 	// program cleanup
 	
 	free(output_dir);
@@ -363,7 +370,9 @@ void scan_and_move(const char *textures_path, const char *current_path,
 		if (is_directory(full_path)) {
 			scan_and_move(textures_path, full_path, folder_name, dest_dir_name);
 		} else if (is_file(full_path)) {
-			if (strstr(entry->d_name, "local") != NULL || strstr(entry->d_name, "normal") != NULL) {
+			if (strstr(entry->d_name, "local") != NULL || 
+				strstr(entry->d_name, "normal") != NULL ||
+				strstr(entry->d_name, "_n.") != NULL) {
 		
 				char new_name[path_max];
 				snprintf(new_name, sizeof(new_name), "%s_%s", folder_name, entry->d_name);
@@ -381,6 +390,49 @@ void scan_and_move(const char *textures_path, const char *current_path,
 		}
 	}
 	closedir(dir);
+}
+
+void rename_non_d_folders(const char *textures_path)
+{
+    struct dirent *entry;
+    DIR *dir = opendir(textures_path);
+    if (!dir) {
+        perror("opendir");
+        return;
+    }
+
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+            continue;
+
+        char old_path[path_max];
+        snprintf(old_path, sizeof(old_path), "%s/%s", textures_path, entry->d_name);
+
+        if (!is_directory(old_path))
+            continue;
+
+        // Leave d_ folders untouched
+        if (strncmp(entry->d_name, "d_", 2) == 0)
+            continue;
+
+        // Skip if already t_ to avoid t_t_ double-prefix on re-runs
+        if (strncmp(entry->d_name, "t_", 2) == 0)
+            continue;
+
+        char new_name[path_max];
+        char new_path[path_max];
+
+        snprintf(new_name, sizeof(new_name), "t_%s", entry->d_name);
+        snprintf(new_path, sizeof(new_path), "%s/%s", textures_path, new_name);
+
+        if (rename(old_path, new_path) == 0) {
+            printf("Renamed: %s -> %s\n", old_path, new_path);
+        } else {
+            perror("rename failed");
+        }
+    }
+
+    closedir(dir);
 }
 
 #ifdef _WIN32
