@@ -1,12 +1,14 @@
-## tdm2nc
-
-This repo is an effort to fully port The Dark Mod assets into fteqw/Nuclide.
-Im trying to make it as seemless as possible, but for now the goal is just to get the art importable.
-tdm2nc is the tool to clean up and make a nuclide/netradiant compatible folder from a TDM installation.
-
-## Build:
-cc bootstrap.c -o run
-
-## Usage:
-
-tdm2nc <path_to_TDM_installation>/
+<h1>tdm2nc:</h1>
+ <p>
+ This repo is an effort to fully port The Dark Mod assets into fteqw/Nuclide.
+ Im trying to make it as seemless as possible, but for now the goal is just to get the art importable.
+ tdm2nc is the tool to clean up and make a nuclide/netradiant compatible folder from a TDM installation.
+ </p>
+ <p>This has only been built on linux so far.</p>
+ <br>
+<h1>Build:</h1>
+ <p>cc bootstrap.c -o run</p>
+ <br>
+<h1>Usage:</h1>
+ <p>tdm2nc &lt;path_to_TDM_installation&gt;</p>
+ <br>
