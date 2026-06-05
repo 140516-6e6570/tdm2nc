@@ -20,8 +20,14 @@ int is_directory(const char *path);
 int is_file(const char *path);
 
 void remove_dir_recursive(const char *path);
-void flatten_recursive(const char *dest_path, const char *src_path, const char *prefix);
-void remove_empty_dirs(const char *path);
+void flatten_recursive	(const char *dest_path, const char *src_path, const char *prefix);
+void remove_empty_dirs	(const char *path);
+void ensure_directory	(const char *path);
+void scan_and_move	(const char *textures_path, const char *current_path,
+			 const char *folder_name, const char *dest_dir_name);
+
+int path_max = 4096;
+
 
 int main(int argc, char* argv[])
 {
@@ -143,6 +149,12 @@ int main(int argc, char* argv[])
 		}
 	}
 
+	#ifdef _WIN32
+	_rmdir(darkmod_src);
+	#else
+	rmdir(darkmod_src);
+	#endif
+
 	closedir(darkmod_dir);
 
 	// flatten directories
@@ -156,7 +168,7 @@ int main(int argc, char* argv[])
 		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 			continue;
 		
-		char first_folder[PATH_MAX];
+		char first_folder[path_max];
 		snprintf(first_folder, sizeof(first_folder), "%s/%s", tex_dir_str, entry->d_name);
 		
 		if (!is_directory(first_folder))
@@ -170,7 +182,32 @@ int main(int argc, char* argv[])
 	
 	closedir(tex_dir);
 
+	// handle normalmaps
+	
+        char normal_dir_str[1024];
+        snprintf(normal_dir_str, sizeof(normal_dir_str), "%s/textures/d_normal/", output_dir);
 
+	ensure_directory(normal_dir_str);
+
+	DIR* normal_dir = opendir(tex_dir_str);
+
+	while ((entry = readdir(normal_dir)) != NULL) {
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+		if (strcmp(entry->d_name, "d_normal") == 0)
+			continue;
+	
+		char folder_path[path_max];
+		snprintf(folder_path, sizeof(folder_path), "%s/%s", tex_dir_str, entry->d_name);
+		
+		if (!is_directory(folder_path))
+			continue;
+	
+		scan_and_move(tex_dir_str, folder_path, entry->d_name, "d_normal");
+	}
+
+	closedir(normal_dir);
+	
 	// program cleanup
 	
 	free(output_dir);
@@ -250,7 +287,7 @@ void remove_empty_dirs(const char *path) {
 		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 		continue;
 	
-		char child_path[PATH_MAX];
+		char child_path[path_max];
 		snprintf(child_path, sizeof(child_path), "%s/%s", path, entry->d_name);
 	
 		if (is_directory(child_path)) {
@@ -262,7 +299,6 @@ void remove_empty_dirs(const char *path) {
 }
 
 void flatten_recursive(const char *dest_path, const char *src_path, const char *prefix) {
-	int path_max = 4096;
 	struct dirent *entry;
 	DIR *dir = opendir(src_path);
 	if (!dir) {
@@ -274,11 +310,11 @@ void flatten_recursive(const char *dest_path, const char *src_path, const char *
 		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
 		continue;
 
-		char full_path[PATH_MAX];
+		char full_path[path_max];
 		snprintf(full_path, sizeof(full_path), "%s/%s", src_path, entry->d_name);
 
 		if (is_directory(full_path)) {
-			char new_prefix[PATH_MAX];
+			char new_prefix[path_max];
 			if (prefix[0] == '\0') {
 				snprintf(new_prefix, sizeof(new_prefix), "%s", entry->d_name);
 			} else {
@@ -307,3 +343,52 @@ void flatten_recursive(const char *dest_path, const char *src_path, const char *
 	closedir(dir);
 }
 
+void scan_and_move(const char *textures_path, const char *current_path,
+                   const char *folder_name, const char *dest_dir_name)
+{
+	struct dirent *entry;
+	DIR *dir = opendir(current_path);
+	if (!dir) {
+		perror("opendir");
+		return;
+	}
+	
+	while ((entry = readdir(dir)) != NULL) {
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+		
+		char full_path[path_max];
+		snprintf(full_path, sizeof(full_path), "%s/%s", current_path, entry->d_name);
+		
+		if (is_directory(full_path)) {
+			scan_and_move(textures_path, full_path, folder_name, dest_dir_name);
+		} else if (is_file(full_path)) {
+			if (strstr(entry->d_name, "local") != NULL || strstr(entry->d_name, "normal") != NULL) {
+		
+				char new_name[path_max];
+				snprintf(new_name, sizeof(new_name), "%s_%s", folder_name, entry->d_name);
+				
+				char dest_path[path_max];
+				snprintf(dest_path, sizeof(dest_path), "%s/%s/%s",
+				textures_path, dest_dir_name, new_name);
+					
+				if (rename(full_path, dest_path) == 0) {
+					printf("Moved(normal): %s -> %s\n", full_path, dest_path);
+				} else {
+					perror("rename failed");
+				}
+			}
+		}
+	}
+	closedir(dir);
+}
+
+#ifdef _WIN32
+void ensure_directory(const char *path) {
+	if (!is_directory(path)) _mkdir(path);
+}
+#else
+void ensure_directory(const char *path) {
+	if (!is_directory(path)) mkdir(path, 0755);
+}
+#endif

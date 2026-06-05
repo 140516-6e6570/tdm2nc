@@ -6,6 +6,6 @@
  </p>
  <p>This has only been built on linux so far.</p>
 <h1>Build:</h1>
- <p>cc bootstrap.c -o run</p>
+ <p>cc mate.c -o run</p>
 <h1>Usage:</h1>
  <p>tdm2nc &lt;path_to_TDM_installation&gt;</p>
