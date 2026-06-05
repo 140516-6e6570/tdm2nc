@@ -37,14 +37,11 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	// 3. Iterate through files
 	while ((entry = readdir(dir)) != NULL) {
-		// Skip directories
 		if (entry->d_type != DT_REG) continue;
-		// Check extension (.pk4)
+
 		char *ext = strrchr(entry->d_name, '.');
 		if (ext && strcmp(ext, ".pk4") == 0) {
-		// Construct full input path
 			char input_path[1024];
 			snprintf(input_path, 
 				sizeof(input_path), 
@@ -53,8 +50,6 @@ int main(int argc, char* argv[])
 				entry->d_name);
 			printf("Processing: %s\n", input_path);
 
-			// Open the zip archive
-			// Note: Assuming 'zip.h' follows standard conventions like libzip
 			int arg = 2;
 			zip_extract(input_path, output_dir, on_extract_entry, &arg);
 		}
