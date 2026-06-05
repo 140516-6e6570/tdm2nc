@@ -1,19 +1,27 @@
 #ifdef _WIN32
 #include <direct.h>
+#include <io.h>
 #include "dirent.h"
 #else
 #include <dirent.h>
+#include <unistd.h>
 #include <sys/stat.h>
 #endif
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 
 #include "zip.h"
 
 int on_extract_entry(const char *filename, void *arg);
+int is_directory(const char *path);
+int is_file(const char *path);
+
 void remove_dir_recursive(const char *path);
+void flatten_recursive(const char *dest_path, const char *src_path, const char *prefix);
+void remove_empty_dirs(const char *path);
 
 int main(int argc, char* argv[])
 {
@@ -25,9 +33,11 @@ int main(int argc, char* argv[])
 	}
 
 	char* output_dir;
+	// placeholder until its needed to specify the output dir
+	const char* tmpstr = "tdm.pk3dir";
 	
-	output_dir = malloc(strlen("tdm.pk3") +1);
-	strcpy(output_dir, "tdm.pk3");
+	output_dir = malloc(strlen(tmpstr) +1);
+	strcpy(output_dir, tmpstr);
 
 	#ifdef _WIN32
 	_mkdir(output_dir);
@@ -67,8 +77,8 @@ int main(int argc, char* argv[])
 
 	// clean section
 	
-	int arr = 13;
-	char* fn[13] = {
+	int arr = 12;
+	char* fn[12] = {
 	"default.cfg",
 //	TODO: delete all files here, "sound/*.sndshd"
 	"af",
@@ -100,8 +110,70 @@ int main(int argc, char* argv[])
 		printf("\nRemoved: %s\n", path);
 	}
 
-	free(output_dir);
+	// handling of folder.pk3dir/textures/darkmod/ to folder.pk3dir/textures/d_foldername(s)
+	
+	char darkmod_src [1024];
+	char darkmod_dest[1024];
 
+	snprintf(darkmod_src , sizeof(darkmod_src) , "%s/textures/darkmod/", output_dir);
+	snprintf(darkmod_dest, sizeof(darkmod_dest), "%s/textures/"	   , output_dir);
+
+	printf("Moving contents of %s to %s\n", darkmod_src, darkmod_dest);
+
+	DIR* darkmod_dir = opendir(darkmod_src);
+
+	while ((entry = readdir(darkmod_dir)) != NULL) {
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+
+		char new_name[1024];
+		snprintf(new_name, sizeof(new_name), "d_%s", entry->d_name);
+
+		char old_path[2048];
+		char new_path[2048];
+
+		snprintf(old_path, sizeof(old_path), "%s/%s", darkmod_src , entry->d_name);
+		snprintf(new_path, sizeof(new_path), "%s/%s", darkmod_dest, new_name);
+
+		// wont work on windows im sure
+		if (rename(old_path, new_path) == 0) {
+			printf("Moved: %s -> %s\n", old_path, new_path);
+		} else {
+			perror("Failed to move directory");
+		}
+	}
+
+	closedir(darkmod_dir);
+
+	// flatten directories
+	
+	char tex_dir_str[1024];
+	snprintf(tex_dir_str, sizeof(tex_dir_str), "%s/textures/", output_dir);
+
+	DIR* tex_dir = opendir(tex_dir_str);
+
+	while ((entry = readdir(tex_dir)) != NULL) {
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+			continue;
+		
+		char first_folder[PATH_MAX];
+		snprintf(first_folder, sizeof(first_folder), "%s/%s", tex_dir_str, entry->d_name);
+		
+		if (!is_directory(first_folder))
+			continue;
+		
+		printf("Processing: %s\n", first_folder);
+		
+		flatten_recursive(first_folder, first_folder, "");
+		remove_empty_dirs(first_folder);
+	}
+	
+	closedir(tex_dir);
+
+
+	// program cleanup
+	
+	free(output_dir);
 	printf("Extraction complete.\n");
 
 	return 0;
@@ -156,3 +228,82 @@ int on_extract_entry(const char *filename, void *arg) {
 
 	return 0;
 }
+
+int is_directory(const char *path) {
+	struct stat st;
+	if (stat(path, &st) != 0) return 0;
+	return S_ISDIR(st.st_mode);
+}
+
+int is_file(const char *path) {
+	struct stat st;
+	if (stat(path, &st) != 0) return 0;
+	return S_ISREG(st.st_mode);
+}
+
+void remove_empty_dirs(const char *path) {
+	struct dirent *entry;
+	DIR *dir = opendir(path);
+	if (!dir) return;
+	
+	while ((entry = readdir(dir)) != NULL) {
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+		continue;
+	
+		char child_path[PATH_MAX];
+		snprintf(child_path, sizeof(child_path), "%s/%s", path, entry->d_name);
+	
+		if (is_directory(child_path)) {
+			remove_empty_dirs(child_path);
+			rmdir(child_path);  // succeeds only if empty
+		}
+	}
+	closedir(dir);
+}
+
+void flatten_recursive(const char *dest_path, const char *src_path, const char *prefix) {
+	int path_max = 4096;
+	struct dirent *entry;
+	DIR *dir = opendir(src_path);
+	if (!dir) {
+		perror("opendir");
+		return;
+	}
+
+	while ((entry = readdir(dir)) != NULL) {
+		if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+		continue;
+
+		char full_path[PATH_MAX];
+		snprintf(full_path, sizeof(full_path), "%s/%s", src_path, entry->d_name);
+
+		if (is_directory(full_path)) {
+			char new_prefix[PATH_MAX];
+			if (prefix[0] == '\0') {
+				snprintf(new_prefix, sizeof(new_prefix), "%s", entry->d_name);
+			} else {
+				snprintf(new_prefix, sizeof(new_prefix), "%s_%s", prefix, entry->d_name);
+			}
+			flatten_recursive(dest_path, full_path, new_prefix);
+		
+		} else if (is_file(full_path)) {
+			// files directly in the first-level folder (empty prefix) are left alone
+			if (prefix[0] == '\0')
+			continue;
+		
+			char new_name[path_max];
+			snprintf(new_name, sizeof(new_name), "%s_%s", prefix, entry->d_name);
+		
+			char target_path[path_max];
+			snprintf(target_path, sizeof(target_path), "%s/%s", dest_path, new_name);
+		
+			if (rename(full_path, target_path) == 0) {
+				printf("Moved: %s -> %s\n", full_path, target_path);
+			} else {
+				perror("rename failed");
+			}
+		}
+	}
+	closedir(dir);
+}
+
