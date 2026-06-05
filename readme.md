@@ -5,10 +5,7 @@
  tdm2nc is the tool to clean up and make a nuclide/netradiant compatible folder from a TDM installation.
  </p>
  <p>This has only been built on linux so far.</p>
- <br>
 <h1>Build:</h1>
  <p>cc bootstrap.c -o run</p>
- <br>
 <h1>Usage:</h1>
  <p>tdm2nc &lt;path_to_TDM_installation&gt;</p>
- <br>
