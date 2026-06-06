@@ -150,11 +150,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
-	#ifdef _WIN32
-	_rmdir(darkmod_src);
-	#else
-	rmdir(darkmod_src);
-	#endif
+	remove_dir_recursive(darkmod_src);
 
 	closedir(darkmod_dir);
 
